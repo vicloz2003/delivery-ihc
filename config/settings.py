@@ -27,6 +27,8 @@ DEBUG = True
 
 ALLOWED_HOSTS = []
 
+AUTH_USER_MODEL = 'core.User'
+
 
 # Application definition
 
@@ -37,6 +39,16 @@ INSTALLED_APPS = [
     "django.contrib.sessions",
     "django.contrib.messages",
     "django.contrib.staticfiles",
+    
+     'rest_framework',
+     'drf_spectacular',
+    'rest_framework.authtoken',
+
+    # Local apps
+    'core',
+    'orders',
+    'payments',
+   
     
    
 ]
@@ -125,6 +137,23 @@ STATIC_URL = "static/"
 # https://docs.djangoproject.com/en/5.2/ref/settings/#default-auto-field
 
 DEFAULT_AUTO_FIELD = "django.db.models.BigAutoField"
+
+REST_FRAMEWORK = {
+    "DEFAULT_AUTHENTICATION_CLASSES": (
+        "rest_framework_simplejwt.authentication.JWTAuthentication",
+    ),
+    "DEFAULT_PERMISSION_CLASSES": (
+        "rest_framework.permissions.IsAuthenticated",
+    ),
+    "DEFAULT_SCHEMA_CLASS": "drf_spectacular.openapi.AutoSchema",
+}
+
+SPECTACULAR_SETTINGS = {
+    "TITLE": "Delivery API",
+    "DESCRIPTION": "Documentación de la API de Delivery (Usuarios, Productos, Pedidos, Conductor)",
+    "VERSION": "1.0.0",
+}
+
 
 
 
