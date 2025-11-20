@@ -1,12 +1,10 @@
+# users/serializers.py
 from rest_framework import serializers
 from django.contrib.auth import authenticate
 from rest_framework_simplejwt.tokens import RefreshToken
 from .models import User
 
 
-# -------------------------------------------------------
-# Serializer: LOGIN (email + password)
-# -------------------------------------------------------
 class EmailLoginSerializer(serializers.Serializer):
     email = serializers.EmailField()
     password = serializers.CharField(write_only=True)
@@ -19,38 +17,79 @@ class EmailLoginSerializer(serializers.Serializer):
 
         if not user:
             raise serializers.ValidationError("Credenciales inválidas")
+        
+        # ✅ NUEVO: Verificar si el usuario está activo
+        if not user.is_active:
+            raise serializers.ValidationError("Usuario inactivo")
 
         attrs["user"] = user
         return attrs
 
 
-# -------------------------------------------------------
-# Serializer: Información básica de usuario
-# -------------------------------------------------------
 class UserSerializer(serializers.ModelSerializer):
+    # ✅ NUEVO: Campo calculado para mostrar el nombre del rol
+    role_display = serializers.CharField(source='get_role_display', read_only=True)
+    
     class Meta:
         model = User
-        fields = ["id", "email", "role", "phone", "telegram_chat_id", "telegram_username"]
+        fields = [
+            "id", 
+            "email", 
+            "role", 
+            "role_display",  # ✅ Nuevo
+            "phone", 
+            "telegram_chat_id", 
+            "telegram_username",
+            "is_telegram_verified",  # ✅ Nuevo
+            "created_at",  # ✅ Nuevo
+        ]
+        read_only_fields = ["id", "created_at"]
 
 
-# -------------------------------------------------------
-# Serializer: Registro de usuario (opcional)
-# Lo usaremos si deseas que el BOT registre clientes.
-# -------------------------------------------------------
 class UserRegisterSerializer(serializers.ModelSerializer):
+    password_confirm = serializers.CharField(write_only=True)  # ✅ Confirmación de password
+    
     class Meta:
         model = User
-        fields = ["email", "password", "role"]
+        fields = ["email", "password", "password_confirm", "role", "phone"]
         extra_kwargs = {
-            "password": {"write_only": True}
+            "password": {"write_only": True, "min_length": 8}  # ✅ Longitud mínima
         }
 
+    def validate(self, attrs):
+        # ✅ NUEVO: Validar que las contraseñas coincidan
+        if attrs['password'] != attrs['password_confirm']:
+            raise serializers.ValidationError({"password": "Las contraseñas no coinciden"})
+        
+        # ✅ NUEVO: Validar formato de email
+        email = attrs.get('email', '').lower()
+        if User.objects.filter(email=email).exists():
+            raise serializers.ValidationError({"email": "Este email ya está registrado"})
+        
+        return attrs
+
     def create(self, validated_data):
-        # Crea usuario con password encriptado
+        # Remover password_confirm
+        validated_data.pop('password_confirm', None)
+        
         user = User.objects.create(
-            email=validated_data["email"],
-            role=validated_data.get("role", "CUSTOMER")
+            email=validated_data["email"].lower(),  # ✅ Email en minúsculas
+            role=validated_data.get("role", "CUSTOMER"),
+            phone=validated_data.get("phone", "")
         )
         user.set_password(validated_data["password"])
         user.save()
         return user
+
+
+
+class TelegramLinkSerializer(serializers.Serializer):
+    """Para vincular cuenta de Telegram con usuario existente"""
+    telegram_chat_id = serializers.CharField()
+    telegram_username = serializers.CharField(required=False, allow_blank=True)
+    
+    def validate_telegram_chat_id(self, value):
+        # Verificar que no esté ya vinculado
+        if User.objects.filter(telegram_chat_id=value).exclude(id=self.context.get('user_id')).exists():
+            raise serializers.ValidationError("Este Telegram ya está vinculado a otra cuenta")
+        return value
