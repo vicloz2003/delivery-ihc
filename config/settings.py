@@ -12,6 +12,10 @@ https://docs.djangoproject.com/en/5.2/ref/settings/
 
 from pathlib import Path
 from datetime import timedelta
+from dotenv import load_dotenv
+import os
+
+load_dotenv()
 
 # Build paths inside the project like this: BASE_DIR / 'subdir'.
 BASE_DIR = Path(__file__).resolve().parent.parent
@@ -49,7 +53,7 @@ INSTALLED_APPS = [
     'core',
     'menu',
     'orders',
-    
+    'payments',
    
     
    
@@ -148,8 +152,9 @@ SIMPLE_JWT = {
 
 }
 
-TELEGRAM_BOT_SECRET = 'your-super-secret-token-here'  # Cambiar en producción
-TELEGRAM_BOT_TOKEN = 'your-telegram-bot-token'  # Token del BotFather
+TELEGRAM_BOT_TOKEN = os.getenv('TELEGRAM_BOT_TOKEN')
+TELEGRAM_BOT_SECRET = os.getenv('BOT_SECRET')  # o el nombre que uses
+API_URL = os.getenv('API_URL')
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (

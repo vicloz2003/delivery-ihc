@@ -5,3 +5,4 @@ python-dotenv
 Pillow
 psycopg2-binary
 drf-spectacular
+#django-filter

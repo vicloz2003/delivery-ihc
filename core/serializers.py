@@ -57,11 +57,11 @@ class UserRegisterSerializer(serializers.ModelSerializer):
         }
 
     def validate(self, attrs):
-        # ✅ NUEVO: Validar que las contraseñas coincidan
+      
         if attrs['password'] != attrs['password_confirm']:
             raise serializers.ValidationError({"password": "Las contraseñas no coinciden"})
         
-        # ✅ NUEVO: Validar formato de email
+        
         email = attrs.get('email', '').lower()
         if User.objects.filter(email=email).exists():
             raise serializers.ValidationError({"email": "Este email ya está registrado"})
