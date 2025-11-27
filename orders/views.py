@@ -64,7 +64,11 @@ class OrderViewSet(viewsets.ModelViewSet):
         return queryset.filter(client=user)
     
     def perform_create(self, serializer):
-        """Al crear un pedido, asignar el cliente actual"""
+         # El usuario ya viene autenticado por el middleware
+        # Solo aseguramos que sea CUSTOMER
+        if self.request.user.role != 'CUSTOMER':
+            from rest_framework.exceptions import PermissionDenied
+            raise PermissionDenied("Solo clientes pueden crear pedidos")
         serializer.save()
     
     @action(detail=False, methods=['get'], url_path='my-orders')
