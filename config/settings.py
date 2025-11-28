@@ -83,7 +83,7 @@ MIDDLEWARE = [
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     
-    #'core.middleware.TelegramWebAppAuthMiddleware',
+    'core.middleware.TelegramWebAppAuthMiddleware',
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -198,6 +198,7 @@ CORS_ALLOWED_ORIGINS = [
     "https://tu-miniapp.vercel.app", 
     # Producción (cambiar después)
     "https://untheatric-evangeline-unprophetic.ngrok-free.dev",
+    "https://web.telegram.org",
 ]
 
 CORS_ALLOW_CREDENTIALS = True

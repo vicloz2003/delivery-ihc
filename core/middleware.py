@@ -50,6 +50,7 @@ def validate_telegram_webapp_data(init_data: str, bot_token: str) -> dict | None
         
         # Verificar que coincidan
         if calculated_hash != received_hash:
+            
             return None
         
         # Parsear datos del usuario
