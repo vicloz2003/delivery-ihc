@@ -1,5 +1,5 @@
 # menu/scripts/load_menu.py
-from .models import Category, Product 
+from menu.models import Category, Product
 import decimal
 
 def run():
