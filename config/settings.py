@@ -194,7 +194,9 @@ SPECTACULAR_SETTINGS = {
 CORS_ALLOWED_ORIGINS = [
     "http://localhost:5173",  # Vite dev server
     "http://localhost:3000",  # Alternativa
-    "https://tu-miniapp.vercel.app",  # Producción (cambiar después)
+    "https://tu-miniapp.vercel.app", 
+    # Producción (cambiar después)
+    "https://untheatric-evangeline-unprophetic.ngrok-free.dev",
 ]
 
 CORS_ALLOW_CREDENTIALS = True
