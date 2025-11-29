@@ -1,3 +1,5 @@
+# orders/serializers.py
+
 from rest_framework import serializers
 from django.db import transaction
 from decimal import Decimal
@@ -44,19 +46,29 @@ class OrderItemCreateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, default='')
     
     def validate_product_id(self, value):
-
-        print(f"[DEBUG-PRODUCT-ID] Validando product_id: {value}, tipo: {type(value)}")
+        """Validar que el producto exista y esté disponible"""
+        print(f"[DEBUG-PRODUCT-ID] Validando product_id: {value}")
+        
         try:
-            product = Product.objects.all().get(id=value)
-            print(f"[DEBUG-PRODUCT-ID] ✓ Producto encontrado: id={product.id}, name={product.name}, is_available={product.is_available}")
+            product = Product.objects.get(id=value)
+            print(f"[DEBUG-PRODUCT-ID] ✓ Producto encontrado: {product.name}")
+            
             if not product.is_available:
                 print(f"[DEBUG-PRODUCT-ID] ✗ Producto NO disponible")
-                raise serializers.ValidationError(f"El producto '{product.name}' no está disponible")   
-            print(f"[DEBUG-PRODUCT-ID] ✓ Validación OK para product_id {value}")
+                raise serializers.ValidationError(
+                    f"El producto '{product.name}' no está disponible"
+                )
+            
+            print(f"[DEBUG-PRODUCT-ID] ✓ Validación OK")
             return value
+            
         except Product.DoesNotExist:
             print(f"[DEBUG-PRODUCT-ID] ✗ Producto NO EXISTE con id={value}")
-            raise serializers.ValidationError("El producto no existe")
+            raise serializers.ValidationError(
+                f"El producto con ID {value} no existe"
+            )
+
+
 # -------------------------------------------------------
 # Serializer: Order (para lectura completa)
 # -------------------------------------------------------
@@ -135,133 +147,185 @@ class OrderListSerializer(serializers.ModelSerializer):
 
 
 # -------------------------------------------------------
-# Serializer: Crear Order (desde Bot de Telegram)
+# Serializer: Crear Order (desde Mini App)
 # -------------------------------------------------------
 class OrderCreateSerializer(serializers.Serializer):
-    """Serializer para crear un pedido desde el bot de Telegram"""
-    
+    """Serializer para crear un pedido desde la Mini App"""
+
     # Ubicación (obligatoria, viene de Telegram)
     delivery_latitude = serializers.DecimalField(max_digits=9, decimal_places=6)
     delivery_longitude = serializers.DecimalField(max_digits=9, decimal_places=6)
     delivery_reference = serializers.CharField(required=False, allow_blank=True, default='')
-    
+
     # Costo de envío (calculado por backend según distancia)
     delivery_fee = serializers.DecimalField(
-        max_digits=10, 
-        decimal_places=2, 
-        default=10.00,
+        max_digits=10,
+        decimal_places=2,
+        default=Decimal('10.00'),
         required=False
     )
-    
+
     # Observaciones generales del pedido
     notes = serializers.CharField(required=False, allow_blank=True, default='')
-    
+
     # Items del pedido
     items = OrderItemCreateSerializer(many=True)
-    
+
     def validate_items(self, value):
         """Validar que haya al menos un item"""
+        print(f"[DEBUG-VALIDATE-ITEMS] Validando {len(value)} items")
+        
         if not value:
             raise serializers.ValidationError("Debe incluir al menos un producto")
+        
         return value
 
     def validate(self, attrs):
         """Validaciones generales - validar cada producto individualmente"""
+        print(f"[DEBUG-VALIDATE] Iniciando validación general")
+        print(f"[DEBUG-VALIDATE] Datos recibidos: {attrs}")
+        
+        items_data = attrs.get('items', [])
+        print(f"[DEBUG-VALIDATE] Total items: {len(items_data)}")
+        
         # Validar que todos los productos existan y estén disponibles
-        items_data = attrs['items']
-        
-        print(f"[DEBUG-VALIDATE-ORDER] Total items a validar: {len(items_data)}")
-        
         for idx, item in enumerate(items_data):
-            product_id = item['product_id']
-            print(f"[DEBUG-VALIDATE-ORDER] Item {idx+1}: product_id={product_id}")
+            product_id = item.get('product_id')
+            print(f"[DEBUG-VALIDATE] Item {idx+1}: product_id={product_id}")
             
             try:
                 product = Product.objects.get(id=product_id)
-                print(f"[DEBUG-VALIDATE-ORDER]   Encontrado: {product.name}, is_available={product.is_available}")
+                print(f"[DEBUG-VALIDATE] Producto: {product.name}, disponible={product.is_available}")
                 
                 if not product.is_available:
-                    raise serializers.ValidationError(f"El producto '{product.name}' no está disponible")
+                    raise serializers.ValidationError(
+                        f"El producto '{product.name}' no está disponible"
+                    )
+                    
             except Product.DoesNotExist:
-                print(f"[DEBUG-VALIDATE-ORDER]   ERROR: Producto NO existe con ID {product_id}")
-                raise serializers.ValidationError(f"El producto con ID {product_id} no existe")
+                print(f"[DEBUG-VALIDATE] ERROR: Producto {product_id} no existe")
+                raise serializers.ValidationError(
+                    f"El producto con ID {product_id} no existe"
+                )
         
-        print(f"[DEBUG-VALIDATE-ORDER] Validación completada exitosamente")
-        return attrs    @transaction.atomic
+        print(f"[DEBUG-VALIDATE] ✓ Validación completada")
+        return attrs
+
+    @transaction.atomic
     def create(self, validated_data):
         """Crear el pedido con sus items"""
-        print(f"[DEBUG-CREATE] Iniciando creación de orden")
+        print("="*60)
+        print(f"[DEBUG-CREATE] 🚀 INICIANDO CREACIÓN DE ORDEN")
+        print("="*60)
+        
         try:
-            items_data = validated_data.pop('items')
-            user = self.context['request'].user
+            # Obtener usuario del contexto
+            request = self.context.get('request')
+            if not request or not request.user:
+                raise serializers.ValidationError("Usuario no autenticado")
             
-            print(f"[DEBUG-CREATE] Usuario: {user.id} ({user.email}), Role: {user.role}")
+            user = request.user
+            print(f"[DEBUG-CREATE] Usuario: {user.id} - {user.email}")
+            print(f"[DEBUG-CREATE] Role: {user.role}")
+            
+            # Extraer items
+            items_data = validated_data.pop('items')
             print(f"[DEBUG-CREATE] Items a procesar: {len(items_data)}")
-
+            
             # Calcular subtotal
             subtotal = Decimal('0.00')
             items_to_create = []
             
             for idx, item_data in enumerate(items_data):
-                product = Product.objects.get(id=item_data['product_id'])
+                product_id = item_data['product_id']
                 quantity = item_data['quantity']
-                unit_price = product.price
-                item_subtotal = unit_price * quantity
-                subtotal += item_subtotal
                 
-                print(f"[DEBUG-CREATE] Item {idx+1}: product={product.name}, qty={quantity}, price={unit_price}, subtotal={item_subtotal}")
-
-                items_to_create.append({
-                    'product': product,
-                    'quantity': quantity,
-                    'unit_price': unit_price,
-                    'subtotal': item_subtotal,
-                    'notes': item_data.get('notes', ''),
-                })
-
+                print(f"[DEBUG-CREATE] Procesando item {idx+1}:")
+                print(f"  - product_id: {product_id}")
+                print(f"  - quantity: {quantity}")
+                
+                try:
+                    product = Product.objects.get(id=product_id)
+                    unit_price = product.price
+                    item_subtotal = unit_price * quantity
+                    subtotal += item_subtotal
+                    
+                    print(f"  - product: {product.name}")
+                    print(f"  - unit_price: {unit_price}")
+                    print(f"  - item_subtotal: {item_subtotal}")
+                    
+                    items_to_create.append({
+                        'product': product,
+                        'quantity': quantity,
+                        'unit_price': unit_price,
+                        'subtotal': item_subtotal,
+                        'notes': item_data.get('notes', ''),
+                    })
+                    
+                except Product.DoesNotExist:
+                    print(f"  ❌ ERROR: Producto {product_id} no existe")
+                    raise serializers.ValidationError(
+                        f"Producto con ID {product_id} no encontrado"
+                    )
+            
             print(f"[DEBUG-CREATE] Subtotal calculado: {subtotal}")
-
-            # TODO: Obtener dirección desde Google Maps API usando las coordenadas
-            # Por ahora, dejar en blanco (se puede implementar después)
+            
+            # Obtener delivery_fee
+            delivery_fee = validated_data.get('delivery_fee', Decimal('10.00'))
+            print(f"[DEBUG-CREATE] Delivery fee: {delivery_fee}")
+            
+            # Dirección (por implementar con Google Maps)
             delivery_address = ""
-
+            
             # Crear el pedido
-            print(f"[DEBUG-CREATE] Creando Order...")
+            print(f"[DEBUG-CREATE] 📦 Creando Order...")
             order = Order.objects.create(
                 client=user,
                 delivery_latitude=validated_data['delivery_latitude'],
                 delivery_longitude=validated_data['delivery_longitude'],
                 delivery_address=delivery_address,
                 delivery_reference=validated_data.get('delivery_reference', ''),
-                delivery_fee=validated_data.get('delivery_fee', Decimal('10.00')),
+                delivery_fee=delivery_fee,
                 notes=validated_data.get('notes', ''),
                 subtotal=subtotal,
             )
-            print(f"[DEBUG-CREATE] ✓ Order creada: {order.order_number} (ID: {order.id})")
-
+            print(f"[DEBUG-CREATE] ✅ Order creada: {order.order_number} (ID: {order.id})")
+            
             # Crear los items
-            print(f"[DEBUG-CREATE] Creando {len(items_to_create)} OrderItems...")
+            print(f"[DEBUG-CREATE] 📝 Creando {len(items_to_create)} OrderItems...")
             for item_data in items_to_create:
                 OrderItem.objects.create(order=order, **item_data)
-            print(f"[DEBUG-CREATE] ✓ OrderItems creados")
-
+            print(f"[DEBUG-CREATE] ✅ OrderItems creados")
+            
             # Crear registro en historial
-            print(f"[DEBUG-CREATE] Creando OrderStatusHistory...")
+            print(f"[DEBUG-CREATE] 📋 Creando OrderStatusHistory...")
             OrderStatusHistory.objects.create(
                 order=order,
                 status='pending',
                 changed_by=user,
-                notes='Pedido creado'
+                notes='Pedido creado desde Mini App'
             )
-            print(f"[DEBUG-CREATE] ✓ OrderStatusHistory creado")
-
-            print(f"[DEBUG-CREATE] ✅ Orden creada exitosamente: {order.order_number}")
+            print(f"[DEBUG-CREATE] ✅ OrderStatusHistory creado")
+            
+            print("="*60)
+            print(f"[DEBUG-CREATE] 🎉 ORDEN CREADA EXITOSAMENTE")
+            print(f"[DEBUG-CREATE] Order Number: {order.order_number}")
+            print(f"[DEBUG-CREATE] Total: {order.total}")
+            print("="*60)
+            
             return order
             
         except Exception as e:
-            print(f"[DEBUG-CREATE] ❌ ERROR durante creación: {type(e).__name__}: {str(e)}")
+            print("="*60)
+            print(f"[DEBUG-CREATE] ❌ ERROR CRÍTICO")
+            print(f"[DEBUG-CREATE] Tipo: {type(e).__name__}")
+            print(f"[DEBUG-CREATE] Mensaje: {str(e)}")
+            print("="*60)
+            
             import traceback
             traceback.print_exc()
+            
+            # Re-lanzar la excepción para que DRF la maneje
             raise
 
 

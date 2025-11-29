@@ -2,6 +2,7 @@ from rest_framework import viewsets, filters, status
 from rest_framework.decorators import action
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated
+from rest_framework.exceptions import PermissionDenied
 from django_filters.rest_framework import DjangoFilterBackend
 
 from .models import Order, OrderStatusHistory
@@ -17,10 +18,10 @@ class OrderViewSet(viewsets.ModelViewSet):
     """
     ViewSet para gestión de pedidos
     
-    ENDPOINTS PRINCIPALES (según documento):
+    ENDPOINTS PRINCIPALES:
     - list: Ver pedidos (cliente ve solo suyos, conductor ve asignados)
     - retrieve: Ver detalle de un pedido
-    - create: Crear nuevo pedido desde bot de Telegram
+    - create: Crear nuevo pedido desde Mini App
     - update_status: Cambiar estado del pedido
     - my_orders: Mis pedidos (para bot)
     - my_deliveries: Mis entregas (para app conductor)
@@ -63,20 +64,52 @@ class OrderViewSet(viewsets.ModelViewSet):
         # Cliente ve solo sus pedidos
         return queryset.filter(client=user)
     
+    def create(self, request, *args, **kwargs):
+        """Override create para mejor logging y manejo de errores"""
+        print("="*60)
+        print(f"[DEBUG-VIEW] 📥 CREATE REQUEST RECIBIDO")
+        print(f"[DEBUG-VIEW] Usuario: {request.user.id} - {request.user.email}")
+        print(f"[DEBUG-VIEW] Role: {request.user.role}")
+        print(f"[DEBUG-VIEW] Data recibida: {request.data}")
+        print("="*60)
+        
+        # Verificar que sea CUSTOMER
+        if request.user.role != 'CUSTOMER':
+            print(f"[DEBUG-VIEW] ❌ Usuario no es CUSTOMER")
+            raise PermissionDenied("Solo clientes pueden crear pedidos")
+        
+        # Validar y crear
+        serializer = self.get_serializer(data=request.data)
+        
+        print(f"[DEBUG-VIEW] Validando datos...")
+        serializer.is_valid(raise_exception=True)
+        print(f"[DEBUG-VIEW] ✓ Datos válidos")
+        
+        print(f"[DEBUG-VIEW] Llamando a perform_create...")
+        self.perform_create(serializer)
+        
+        print(f"[DEBUG-VIEW] ✓ Orden creada exitosamente")
+        
+        headers = self.get_success_headers(serializer.data)
+        return Response(
+            serializer.data,
+            status=status.HTTP_201_CREATED,
+            headers=headers
+        )
+    
     def perform_create(self, serializer):
-                        # El usuario ya viene autenticado por el middleware
-                        # Solo aseguramos que sea CUSTOMER
-                        print(f"[DEBUG-VIEW] perform_create llamado")
-                        print(f"[DEBUG-VIEW] Usuario: {self.request.user.id}, Role: {self.request.user.role}")
-                        if self.request.user.role != 'CUSTOMER':
-                            print(f"[DEBUG-VIEW] ❌ Usuario no es CUSTOMER")
-                            from rest_framework.exceptions import PermissionDenied
-                            raise PermissionDenied("Solo clientes pueden crear pedidos")
-                        print(f"[DEBUG-VIEW] ✓ Usuario es CUSTOMER, llamando a serializer.save()")
-                        serializer.save()    @action(detail=False, methods=['get'], url_path='my-orders')
+        """
+        Guardar la orden
+        El serializer maneja toda la lógica de creación
+        """
+        print(f"[DEBUG-VIEW] perform_create - guardando orden...")
+        serializer.save()
+        print(f"[DEBUG-VIEW] ✓ perform_create completado")
+    
+    @action(detail=False, methods=['get'], url_path='my-orders')
     def my_orders(self, request):
         """
-        Endpoint: GET /api/orders/my-orders/
+        Endpoint: GET /api/orders/orders/my-orders/
         Ver todos mis pedidos como cliente (para el bot)
         """
         orders = self.get_queryset().filter(client=request.user)
@@ -95,7 +128,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=False, methods=['get'], url_path='my-deliveries')
     def my_deliveries(self, request):
         """
-        Endpoint: GET /api/orders/my-deliveries/
+        Endpoint: GET /api/orders/orders/my-deliveries/
         Ver mis entregas asignadas como conductor (para app móvil)
         """
         if request.user.role != 'DRIVER':
@@ -119,7 +152,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'], url_path='update-status')
     def update_status(self, request, pk=None):
         """
-        Endpoint: POST /api/orders/{id}/update-status/
+        Endpoint: POST /api/orders/orders/{id}/update-status/
         Actualizar el estado de un pedido
         
         Usado por:
@@ -146,7 +179,7 @@ class OrderViewSet(viewsets.ModelViewSet):
     @action(detail=True, methods=['post'])
     def cancel(self, request, pk=None):
         """
-        Endpoint: POST /api/orders/{id}/cancel/
+        Endpoint: POST /api/orders/orders/{id}/cancel/
         Cancelar un pedido (cliente o conductor)
         Body: {"reason": "Cliente canceló"}
         """
