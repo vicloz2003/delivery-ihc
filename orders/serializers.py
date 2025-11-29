@@ -44,16 +44,19 @@ class OrderItemCreateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, default='')
     
     def validate_product_id(self, value):
-   
+
+        print(f"[DEBUG-PRODUCT-ID] Validando product_id: {value}, tipo: {type(value)}")
         try:
-            product = Product.objects.all().get(id=value)  
+            product = Product.objects.all().get(id=value)
+            print(f"[DEBUG-PRODUCT-ID] ✓ Producto encontrado: id={product.id}, name={product.name}, is_available={product.is_available}")
             if not product.is_available:
-                raise serializers.ValidationError(f"El producto '{product.name}' no está disponible")
+                print(f"[DEBUG-PRODUCT-ID] ✗ Producto NO disponible")
+                raise serializers.ValidationError(f"El producto '{product.name}' no está disponible")   
+            print(f"[DEBUG-PRODUCT-ID] ✓ Validación OK para product_id {value}")
             return value
         except Product.DoesNotExist:
+            print(f"[DEBUG-PRODUCT-ID] ✗ Producto NO EXISTE con id={value}")
             raise serializers.ValidationError("El producto no existe")
-
-
 # -------------------------------------------------------
 # Serializer: Order (para lectura completa)
 # -------------------------------------------------------
@@ -187,57 +190,79 @@ class OrderCreateSerializer(serializers.Serializer):
         return attrs    @transaction.atomic
     def create(self, validated_data):
         """Crear el pedido con sus items"""
-        items_data = validated_data.pop('items')
-        user = self.context['request'].user
-        
-        # Calcular subtotal
-        subtotal = Decimal('0.00')
-        items_to_create = []
-        
-        for item_data in items_data:
-            product = Product.objects.get(id=item_data['product_id'])
-            quantity = item_data['quantity']
-            unit_price = product.price
-            item_subtotal = unit_price * quantity
-            subtotal += item_subtotal
+        print(f"[DEBUG-CREATE] Iniciando creación de orden")
+        try:
+            items_data = validated_data.pop('items')
+            user = self.context['request'].user
             
-            items_to_create.append({
-                'product': product,
-                'quantity': quantity,
-                'unit_price': unit_price,
-                'subtotal': item_subtotal,
-                'notes': item_data.get('notes', ''),
-            })
-        
-        # TODO: Obtener dirección desde Google Maps API usando las coordenadas
-        # Por ahora, dejar en blanco (se puede implementar después)
-        delivery_address = ""
-        
-        # Crear el pedido
-        order = Order.objects.create(
-            client=user,
-            delivery_latitude=validated_data['delivery_latitude'],
-            delivery_longitude=validated_data['delivery_longitude'],
-            delivery_address=delivery_address,
-            delivery_reference=validated_data.get('delivery_reference', ''),
-            delivery_fee=validated_data.get('delivery_fee', Decimal('10.00')),
-            notes=validated_data.get('notes', ''),
-            subtotal=subtotal,
-        )
-        
-        # Crear los items
-        for item_data in items_to_create:
-            OrderItem.objects.create(order=order, **item_data)
-        
-        # Crear registro en historial
-        OrderStatusHistory.objects.create(
-            order=order,
-            status='pending',
-            changed_by=user,
-            notes='Pedido creado'
-        )
-        
-        return order
+            print(f"[DEBUG-CREATE] Usuario: {user.id} ({user.email}), Role: {user.role}")
+            print(f"[DEBUG-CREATE] Items a procesar: {len(items_data)}")
+
+            # Calcular subtotal
+            subtotal = Decimal('0.00')
+            items_to_create = []
+            
+            for idx, item_data in enumerate(items_data):
+                product = Product.objects.get(id=item_data['product_id'])
+                quantity = item_data['quantity']
+                unit_price = product.price
+                item_subtotal = unit_price * quantity
+                subtotal += item_subtotal
+                
+                print(f"[DEBUG-CREATE] Item {idx+1}: product={product.name}, qty={quantity}, price={unit_price}, subtotal={item_subtotal}")
+
+                items_to_create.append({
+                    'product': product,
+                    'quantity': quantity,
+                    'unit_price': unit_price,
+                    'subtotal': item_subtotal,
+                    'notes': item_data.get('notes', ''),
+                })
+
+            print(f"[DEBUG-CREATE] Subtotal calculado: {subtotal}")
+
+            # TODO: Obtener dirección desde Google Maps API usando las coordenadas
+            # Por ahora, dejar en blanco (se puede implementar después)
+            delivery_address = ""
+
+            # Crear el pedido
+            print(f"[DEBUG-CREATE] Creando Order...")
+            order = Order.objects.create(
+                client=user,
+                delivery_latitude=validated_data['delivery_latitude'],
+                delivery_longitude=validated_data['delivery_longitude'],
+                delivery_address=delivery_address,
+                delivery_reference=validated_data.get('delivery_reference', ''),
+                delivery_fee=validated_data.get('delivery_fee', Decimal('10.00')),
+                notes=validated_data.get('notes', ''),
+                subtotal=subtotal,
+            )
+            print(f"[DEBUG-CREATE] ✓ Order creada: {order.order_number} (ID: {order.id})")
+
+            # Crear los items
+            print(f"[DEBUG-CREATE] Creando {len(items_to_create)} OrderItems...")
+            for item_data in items_to_create:
+                OrderItem.objects.create(order=order, **item_data)
+            print(f"[DEBUG-CREATE] ✓ OrderItems creados")
+
+            # Crear registro en historial
+            print(f"[DEBUG-CREATE] Creando OrderStatusHistory...")
+            OrderStatusHistory.objects.create(
+                order=order,
+                status='pending',
+                changed_by=user,
+                notes='Pedido creado'
+            )
+            print(f"[DEBUG-CREATE] ✓ OrderStatusHistory creado")
+
+            print(f"[DEBUG-CREATE] ✅ Orden creada exitosamente: {order.order_number}")
+            return order
+            
+        except Exception as e:
+            print(f"[DEBUG-CREATE] ❌ ERROR durante creación: {type(e).__name__}: {str(e)}")
+            import traceback
+            traceback.print_exc()
+            raise
 
 
 # -------------------------------------------------------
