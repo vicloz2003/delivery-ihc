@@ -1,69 +1,141 @@
 # menu/scripts/load_menu.py
+
 from menu.models import Category, Product
-import decimal
 
 def run():
     """
-    Función de carga de datos iniciales. 
-    Ejecutada por: python manage.py runscript load_menu
+    Script para cargar datos iniciales de menú
+    Solo crea/actualiza, no elimina productos con órdenes
     """
+    
     print("Iniciando la carga de categorías y productos iniciales...")
     
-    # --- 1. Limpieza de Datos (Importante para evitar duplicados en cada despliegue) ---
-    Product.objects.all().delete()
-    Category.objects.all().delete()
-    print("Datos de categorías y productos existentes eliminados.")
+    # ✅ NO eliminar todo - solo actualizar/crear
+    # En lugar de: Product.objects.all().delete()
+    # Hacemos: get_or_create
     
-    # --- 2. Creación de Categorías ---
-    try:
-        entradas = Category.objects.create(name="Entradas", description="Complementos y acompañamientos.")
-        hamburguesa = Category.objects.create(name="Hamburguesas", description="Nuestras especialidades gourmet.")
-        bebidas = Category.objects.create(name="Bebidas", description="Refrescos, jugos naturales y cervezas.")
-        postres = Category.objects.create(name="Postres", description="El final perfecto para tu pedido.")
-        print(f"Creadas {Category.objects.count()} categorías.")
-    except Exception as e:
-        print(f"Error al crear categorías: {e}")
-        return # Detiene la ejecución si falla la categoría
-
-    # --- 3. Creación de Productos ---
+    # Definir categorías
+    categories_data = [
+        {"name": "Pizzas", "description": "Deliciosas pizzas artesanales"},
+        {"name": "Hamburguesas", "description": "Hamburguesas gourmet"},
+        {"name": "Bebidas", "description": "Bebidas frías y calientes"},
+        {"name": "Postres", "description": "Dulces tentaciones"},
+    ]
     
-    # Hamburguesas
-    Product.objects.create(category=hamburguesa, name="Cheese Bacon Deluxe", 
-                           price=decimal.Decimal("38.50"), is_available=True, is_featured=True,
-                           image_url="https://picsum.photos/id/350/200/200", 
-                           preparation_time=20, description="Doble carne, queso cheddar y tocino crujiente.")
-                           
-    Product.objects.create(category=hamburguesa, name="Clásica Simple", 
-                           price=decimal.Decimal("25.00"), is_available=True, 
-                           image_url="https://picsum.photos/id/1060/200/200", 
-                           preparation_time=15, description="Carne de res, lechuga, tomate y salsa de la casa.")
+    print(f"Creando/actualizando {len(categories_data)} categorías...")
     
-    # Entradas
-    Product.objects.create(category=entradas, name="Papas Fritas Grandes", 
-                           price=decimal.Decimal("15.00"), is_available=True, 
-                           image_url="https://picsum.photos/id/1004/200/200", 
-                           preparation_time=10, description="Papas fritas al estilo rústico.")
-                           
-    Product.objects.create(category=entradas, name="Aros de Cebolla", 
-                           price=decimal.Decimal("18.00"), is_available=True, 
-                           image_url="https://picsum.photos/id/111/200/200", 
-                           preparation_time=12, description="Cebollas fritas y crujientes.")
+    for cat_data in categories_data:
+        category, created = Category.objects.get_or_create(
+            name=cat_data["name"],
+            defaults={"description": cat_data["description"]}
+        )
+        if created:
+            print(f"  ✅ Categoría creada: {category.name}")
+        else:
+            print(f"  ℹ️  Categoría ya existe: {category.name}")
     
-    # Bebidas
-    Product.objects.create(category=bebidas, name="Limonada Natural", 
-                           price=decimal.Decimal("10.00"), is_available=True, 
-                           image_url="https://picsum.photos/id/1080/200/200",
-                           preparation_time=5, description="Refrescante limonada recién hecha.")
-                           
-    Product.objects.create(category=bebidas, name="Cerveza Artesanal", 
-                           price=decimal.Decimal("22.00"), is_available=True, 
-                           image_url="https://picsum.photos/id/1057/200/200",
-                           preparation_time=5, description="Cerveza local, estilo IPA.")
-
-    # Postres
-    Product.objects.create(category=postres, name="Brownie con Helado", 
-                           price=decimal.Decimal("20.00"), is_available=True, 
-                           image_url="https://picsum.photos/id/225/200/200", 
-                           preparation_time=7, description="Brownie de chocolate caliente con helado de vainilla.")
-                           
-    print(f"Carga de datos de menú completada exitosamente. Total de productos: {Product.objects.count()}")
+    # Definir productos
+    products_data = [
+        # Pizzas
+        {
+            "name": "Pizza Margarita",
+            "description": "Tomate, mozzarella, albahaca fresca",
+            "price": 45.00,
+            "category": "Pizzas",
+            "image_url": "https://images.unsplash.com/photo-1574071318508-1cdbab80d002",
+        },
+        {
+            "name": "Pizza Pepperoni",
+            "description": "Pepperoni, mozzarella, salsa de tomate",
+            "price": 50.00,
+            "category": "Pizzas",
+            "image_url": "https://images.unsplash.com/photo-1628840042765-356cda07504e",
+        },
+        {
+            "name": "Pizza Vegetariana",
+            "description": "Pimientos, champiñones, aceitunas, cebolla",
+            "price": 48.00,
+            "category": "Pizzas",
+            "image_url": "https://images.unsplash.com/photo-1511689660979-10d2b1aada49",
+        },
+        
+        # Hamburguesas
+        {
+            "name": "Hamburguesa Clásica",
+            "description": "Carne de res, lechuga, tomate, cebolla, queso",
+            "price": 38.00,
+            "category": "Hamburguesas",
+            "image_url": "https://images.unsplash.com/photo-1568901346375-23c9450c58cd",
+        },
+        {
+            "name": "Hamburguesa BBQ",
+            "description": "Carne, tocino, queso cheddar, salsa BBQ",
+            "price": 42.00,
+            "category": "Hamburguesas",
+            "image_url": "https://images.unsplash.com/photo-1553979459-d2229ba7433b",
+        },
+        
+        # Bebidas
+        {
+            "name": "Coca Cola",
+            "description": "Refresco 500ml",
+            "price": 8.00,
+            "category": "Bebidas",
+            "image_url": "https://images.unsplash.com/photo-1554866585-cd94860890b7",
+        },
+        {
+            "name": "Cerveza Artesanal",
+            "description": "Cerveza local 330ml",
+            "price": 22.00,
+            "category": "Bebidas",
+            "image_url": "https://images.unsplash.com/photo-1608270586620-248524c67de9",
+        },
+        {
+            "name": "Jugo Natural",
+            "description": "Jugo de frutas frescas 400ml",
+            "price": 12.00,
+            "category": "Bebidas",
+            "image_url": "https://images.unsplash.com/photo-1600271886742-f049cd451bba",
+        },
+        
+        # Postres
+        {
+            "name": "Cheesecake",
+            "description": "Tarta de queso con frutos rojos",
+            "price": 28.00,
+            "category": "Postres",
+            "image_url": "https://images.unsplash.com/photo-1533134242820-860c38a8e84e",
+        },
+        {
+            "name": "Brownie con Helado",
+            "description": "Brownie de chocolate con helado de vainilla",
+            "price": 25.00,
+            "category": "Postres",
+            "image_url": "https://images.unsplash.com/photo-1607920591413-4ec007e70023",
+        },
+    ]
+    
+    print(f"Creando/actualizando {len(products_data)} productos...")
+    
+    for prod_data in products_data:
+        category = Category.objects.get(name=prod_data["category"])
+        
+        product, created = Product.objects.update_or_create(
+            name=prod_data["name"],
+            defaults={
+                "description": prod_data["description"],
+                "price": prod_data["price"],
+                "category": category,
+                "image_url": prod_data["image_url"],
+                "is_available": True,
+            }
+        )
+        
+        if created:
+            print(f"  ✅ Producto creado: {product.name} - Bs.{product.price}")
+        else:
+            print(f"  🔄 Producto actualizado: {product.name} - Bs.{product.price}")
+    
+    print("\n✅ Carga de datos completada exitosamente")
+    print(f"📊 Total categorías: {Category.objects.count()}")
+    print(f"📊 Total productos: {Product.objects.count()}")
