@@ -64,14 +64,16 @@ class OrderViewSet(viewsets.ModelViewSet):
         return queryset.filter(client=user)
     
     def perform_create(self, serializer):
-         # El usuario ya viene autenticado por el middleware
-        # Solo aseguramos que sea CUSTOMER
-        if self.request.user.role != 'CUSTOMER':
-            from rest_framework.exceptions import PermissionDenied
-            raise PermissionDenied("Solo clientes pueden crear pedidos")
-        serializer.save()
-    
-    @action(detail=False, methods=['get'], url_path='my-orders')
+                        # El usuario ya viene autenticado por el middleware
+                        # Solo aseguramos que sea CUSTOMER
+                        print(f"[DEBUG-VIEW] perform_create llamado")
+                        print(f"[DEBUG-VIEW] Usuario: {self.request.user.id}, Role: {self.request.user.role}")
+                        if self.request.user.role != 'CUSTOMER':
+                            print(f"[DEBUG-VIEW] ❌ Usuario no es CUSTOMER")
+                            from rest_framework.exceptions import PermissionDenied
+                            raise PermissionDenied("Solo clientes pueden crear pedidos")
+                        print(f"[DEBUG-VIEW] ✓ Usuario es CUSTOMER, llamando a serializer.save()")
+                        serializer.save()    @action(detail=False, methods=['get'], url_path='my-orders')
     def my_orders(self, request):
         """
         Endpoint: GET /api/orders/my-orders/
