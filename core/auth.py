@@ -4,10 +4,9 @@ from django.conf import settings
 from django.contrib.auth import get_user_model
 from rest_framework import authentication, exceptions
 
-from .middleware import validate_telegram_webapp_data  # usa la función existente
+from core.middleware import validate_telegram_webapp_data  # ajusta el import si es otra ruta
 
 logger = logging.getLogger(__name__)
-
 User = get_user_model()
 
 class TelegramHeaderAuthentication(authentication.BaseAuthentication):
@@ -26,53 +25,56 @@ class TelegramHeaderAuthentication(authentication.BaseAuthentication):
             logger.warning("TelegramHeaderAuthentication: TELEGRAM_BOT_TOKEN not set")
             return None
 
-        # validate_telegram_webapp_data should return parsed dict on success,
-        # or False/None on failure. Adapt if your function returns a User.
-        parsed = validate_telegram_webapp_data(init_data, bot_token)
-        if not parsed:
+        validated = validate_telegram_webapp_data(init_data, bot_token)
+        if not validated:
             raise exceptions.AuthenticationFailed("Invalid Telegram init data")
 
-        # parsed is expected to contain a 'user' JSON or at least an 'id' for telegram user
-        telegram_user = None
-        if isinstance(parsed, dict):
-            telegram_user = parsed.get("user") or parsed.get("tg_user") or parsed
-        elif hasattr(parsed, "id"):
-            # If validate_telegram_webapp_data already returns a Django user instance
-            return (parsed, None)
-
-        if not telegram_user:
-            raise exceptions.AuthenticationFailed("Telegram init data missing user info")
-
-        tg_id = None
-        if isinstance(telegram_user, dict):
-            tg_id = telegram_user.get("id")
-            first_name = telegram_user.get("first_name") or ""
-        else:
-            # fallback: if an object with id attribute
-            tg_id = getattr(telegram_user, "id", None)
-            first_name = getattr(telegram_user, "first_name", "") or ""
-
+        # validated is expected to be a dict with keys: id, first_name, last_name, username, language_code
+        tg_id = validated.get("id")
         if not tg_id:
             raise exceptions.AuthenticationFailed("Telegram user id not found in init data")
 
-        # Create or get a local Django user representing this Telegram user.
-        username = f"tg_{tg_id}"
+        tg_username = validated.get("username", "") or ""
+        first_name = validated.get("first_name", "") or ""
+        last_name = validated.get("last_name", "") or ""
+
+        # Use telegram_chat_id as the unique identifier in local User model
         try:
             user, created = User.objects.get_or_create(
-                username=username,
-                defaults={"first_name": first_name},
+                telegram_chat_id=str(tg_id),
+                defaults={
+                    "telegram_username": tg_username,
+                    "first_name": first_name,
+                    "last_name": last_name,
+                    "email": f"telegram_{tg_id}@temp.com",
+                    "role": "CUSTOMER",
+                    "is_telegram_verified": True,
+                },
             )
-            if created:
-                logger.info("Created local user for Telegram id %s -> %s", tg_id, username)
+            if not created:
+                # keep user data in sync if desired (optional)
+                updated = False
+                if user.telegram_username != tg_username:
+                    user.telegram_username = tg_username
+                    updated = True
+                if user.first_name != first_name:
+                    user.first_name = first_name
+                    updated = True
+                if user.last_name != last_name:
+                    user.last_name = last_name
+                    updated = True
+                if updated:
+                    user.save()
+
         except Exception as exc:
             logger.exception("Error getting/creating user for Telegram id %s: %s", tg_id, exc)
             raise exceptions.AuthenticationFailed("Internal error during Telegram auth")
 
-        # Ensure request caching aligns with middleware approach
+        # Ensure DRF/get_user cache reflects this user
         try:
-            request._cached_user = user
+            request._cached_user = user  # some code uses this cache
         except Exception:
             setattr(request, "_cached_user", user)
 
-        logger.debug("[DEBUG-AUTH] Authenticated via TelegramHeaderAuthentication: %s", username)
+        logger.debug("[DEBUG-AUTH] Authenticated via TelegramHeaderAuthentication: tg_%s", tg_id)
         return (user, None)

@@ -3,6 +3,7 @@
 import hmac
 import hashlib
 import json
+import logging
 from urllib.parse import parse_qsl
 from django.conf import settings
 from django.http import JsonResponse
@@ -167,7 +168,18 @@ class TelegramWebAppAuthMiddleware(MiddlewareMixin):
             )
         
         # Asignar usuario al request
-        request._cached_user = user
+
+        try:
+            request.user = user
+        except Exception:
+            setattr(request, "user", user)
+        try:
+            request._cached_user = user
+        except Exception:
+            setattr(request, "_cached_user", user)
+
         request.telegram_data = validated_data
-        
+        logger = logging.getLogger(__name__)
+        logger.debug("[DEBUG-MIDDLEWARE] request.user fijado en middleware: %s", getattr(user, "id", None))
+
         return None
