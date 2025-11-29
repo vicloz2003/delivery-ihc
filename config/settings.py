@@ -80,10 +80,11 @@ MIDDLEWARE = [
     "django.middleware.common.CommonMiddleware",
     "django.middleware.csrf.CsrfViewMiddleware",
     "django.contrib.auth.middleware.AuthenticationMiddleware",
+    'core.middleware.TelegramWebAppAuthMiddleware',
     "django.contrib.messages.middleware.MessageMiddleware",
     "django.middleware.clickjacking.XFrameOptionsMiddleware",
     
-    'core.middleware.TelegramWebAppAuthMiddleware',
+    
 ]
 
 ROOT_URLCONF = "config.urls"
@@ -178,6 +179,7 @@ API_URL = os.getenv('API_URL')
 
 REST_FRAMEWORK = {
     "DEFAULT_AUTHENTICATION_CLASSES": (
+        "core.auth.TelegramHeaderAuthentication",
         "rest_framework_simplejwt.authentication.JWTAuthentication",
     ),
     "DEFAULT_PERMISSION_CLASSES": (

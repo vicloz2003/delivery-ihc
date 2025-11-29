@@ -167,7 +167,7 @@ class TelegramWebAppAuthMiddleware(MiddlewareMixin):
             )
         
         # Asignar usuario al request
-        request.user = user
+        request._cached_user = user
         request.telegram_data = validated_data
         
         return None
