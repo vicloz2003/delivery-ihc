@@ -161,22 +161,30 @@ class OrderCreateSerializer(serializers.Serializer):
         if not value:
             raise serializers.ValidationError("Debe incluir al menos un producto")
         return value
-    
+
     def validate(self, attrs):
-        """Validaciones generales"""
-        # Validar que todos los productos existan
-        product_ids = [item['product_id'] for item in attrs['items']]
-        existing_products = Product.objects.filter(
-            id__in=product_ids,
-            is_available=True
-        ).count()
+        """Validaciones generales - validar cada producto individualmente"""
+        # Validar que todos los productos existan y estén disponibles
+        items_data = attrs['items']
         
-        if existing_products != len(product_ids):
-            raise serializers.ValidationError("Algunos productos no están disponibles")
+        print(f"[DEBUG-VALIDATE-ORDER] Total items a validar: {len(items_data)}")
         
-        return attrs
-    
-    @transaction.atomic
+        for idx, item in enumerate(items_data):
+            product_id = item['product_id']
+            print(f"[DEBUG-VALIDATE-ORDER] Item {idx+1}: product_id={product_id}")
+            
+            try:
+                product = Product.objects.get(id=product_id)
+                print(f"[DEBUG-VALIDATE-ORDER]   Encontrado: {product.name}, is_available={product.is_available}")
+                
+                if not product.is_available:
+                    raise serializers.ValidationError(f"El producto '{product.name}' no está disponible")
+            except Product.DoesNotExist:
+                print(f"[DEBUG-VALIDATE-ORDER]   ERROR: Producto NO existe con ID {product_id}")
+                raise serializers.ValidationError(f"El producto con ID {product_id} no existe")
+        
+        print(f"[DEBUG-VALIDATE-ORDER] Validación completada exitosamente")
+        return attrs    @transaction.atomic
     def create(self, validated_data):
         """Crear el pedido con sus items"""
         items_data = validated_data.pop('items')
