@@ -44,9 +44,9 @@ class OrderItemCreateSerializer(serializers.Serializer):
     notes = serializers.CharField(required=False, allow_blank=True, default='')
     
     def validate_product_id(self, value):
-        """Validar que el producto existe y está disponible"""
+   
         try:
-            product = Product.objects.get(id=value)
+            product = Product.objects.all().get(id=value)  
             if not product.is_available:
                 raise serializers.ValidationError(f"El producto '{product.name}' no está disponible")
             return value
