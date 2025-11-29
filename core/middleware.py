@@ -48,10 +48,12 @@ def validate_telegram_webapp_data(init_data: str, bot_token: str) -> dict | None
             digestmod=hashlib.sha256
         ).hexdigest()
         
-        # Verificar que coincidan
+               # Verificar que coincidan
         if calculated_hash != received_hash:
-            
+            print(f"[DEBUG-HASH] ❌ Hash mismatch!\n  calculated: {calculated_hash}\n  received:   {received_hash}")
             return None
+        else:
+            print(f"[DEBUG-HASH] ✅ Hash OK")
         
         # Parsear datos del usuario
         user_data = json.loads(parsed_data.get('user', '{}'))
@@ -116,15 +118,20 @@ class TelegramWebAppAuthMiddleware(MiddlewareMixin):
                 'detail': 'X-Telegram-Init-Data header is required'
             }, status=401)
         
-        # Validar initData
+               # Validar initData
         bot_token = settings.TELEGRAM_BOT_TOKEN
+        print(f"[DEBUG-MIDDLEWARE] bot_token presente: {bool(bot_token)}, primeros 10 chars: {bot_token[:10] if bot_token else 'None'}")
+        print(f"[DEBUG-MIDDLEWARE] init_data primeros 80 chars: {init_data[:80]}")
         validated_data = validate_telegram_webapp_data(init_data, bot_token)
         
         if not validated_data:
+            print(f"[DEBUG-MIDDLEWARE] ❌ Validación FALLÓ - hash HMAC no coincide o error en parseo")
             return JsonResponse({
                 'error': 'Invalid Telegram authentication data',
                 'detail': 'InitData signature verification failed'
             }, status=403)
+        else:
+            print(f"[DEBUG-MIDDLEWARE] ✅ Validación OK - usuario ID: {validated_data.get('id')}")
         
         # Buscar o crear usuario
         telegram_id = str(validated_data['id'])
